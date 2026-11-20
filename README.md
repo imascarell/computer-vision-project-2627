@@ -64,6 +64,17 @@ Patrón impreso: tablero de **7×9 cuadros**, es decir, **6×8 esquinas interior
 
 La imagen no se voltea en ningún punto del proyecto: calibración, dataset y demo usan el flujo de la cámara tal como llega.
 
+### Calibración
+
+```bash
+cd calibration
+python calibrate.py
+```
+
+Calcula K, la distorsión y el RMS con las imágenes de `calibration/images/` y guarda `calibration/calib.npz`.
+Resultado actual (20 imágenes, 640×480, cuadro de 25 mm): **RMS = 0,112 px**, fx ≈ 579, fy ≈ 577, cx ≈ 316, cy ≈ 256, distorsión radial muy pequeña (k1 ≈ 0,003; k2 ≈ −0,035).
+`cornerSubPix` usa una ventana de 5 px porque los cuadros miden unos 12 px en la imagen; con 11 px el RMS sube a ≈ 5 px.
+
 ### Captura de imágenes
 
 ```bash
