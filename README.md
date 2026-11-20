@@ -36,6 +36,15 @@ pip install -r requirements.txt
 
 ## Uso
 
+### Cámara con FPS
+
+```bash
+cd security
+python camera.py
+```
+
+Abre la cámara a 640×480 y muestra los FPS en pantalla. Se cierra con `q`.
+
 ### Prueba del decodificador (sin cámara)
 
 ```bash
