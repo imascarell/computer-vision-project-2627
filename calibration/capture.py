@@ -13,7 +13,7 @@ import cv2
 CAM_INDEX = 0
 WIDTH = 640                 # misma resolucion que en la demo
 HEIGHT = 480
-PATTERN = (9, 6)            # esquinas interiores del tablero (10x7 cuadros)
+PATTERN = (6, 8)            # esquinas interiores del tablero impreso (7x9 cuadros)
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
 FLAGS = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
 

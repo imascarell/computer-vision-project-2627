@@ -56,7 +56,7 @@ python test_decoder.py
 
 Se usa la cámara del portátil a una resolución fija. La calibración se hace con la **misma cámara y la misma resolución** que la demo.
 
-Patrón: tablero de **10×7 cuadros de 25 mm**, es decir, **9×6 esquinas interiores** (`calibration/pattern/patron_10x7_25mm.pdf`).
+Patrón impreso: tablero de **7×9 cuadros**, es decir, **6×8 esquinas interiores** (`PATTERN = (6, 8)`); es el que detecta OpenCV con la cámara. El PDF de `calibration/pattern/` es de 10×7 cuadros de 25 mm (9×6 esquinas), pero la copia impresa no coincide con él. El tamaño del cuadro se mide con regla sobre el papel impreso.
 
 - Imprimir al 100 % (tamaño real, sin "ajustar a página").
 - Pegarlo sobre un cartón rígido.
