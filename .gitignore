@@ -1,2 +1,16 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Vídeos (pesan demasiado para el repo)
+*.mp4
+*.avi
+*.mov
