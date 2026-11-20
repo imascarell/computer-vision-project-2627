@@ -62,6 +62,17 @@ Patrón: tablero de **10×7 cuadros de 25 mm**, es decir, **9×6 esquinas interi
 - Pegarlo sobre un cartón rígido.
 - Medir un cuadro con una regla y usar esa medida en la calibración.
 
+La imagen no se voltea en ningún punto del proyecto: calibración, dataset y demo usan el flujo de la cámara tal como llega.
+
+### Captura de imágenes
+
+```bash
+cd calibration
+python capture.py
+```
+
+Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/images/`; con `q` se sale. Hacen falta unas 15–20 imágenes variando distancia, inclinación y posición del tablero, incluyendo los bordes y las esquinas del encuadre.
+
 ## Estado
 
 | Fase | Contenido | Estado |
