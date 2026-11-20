@@ -102,7 +102,7 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Propuesta | Hecha |
-| 1 | Base: cámara, FPS, calibración y undistort | Hecha; falta verificar FPS ≥ 25 en el portátil |
+| 1 | Base: cámara, FPS, calibración y undistort | Hecha (30 FPS con y sin corrección, RMS 0,114 px) |
 | 2 | Segmentación de la mano | Pendiente |
 | 3 | Features y registro de plantillas | Pendiente |
 | 4 | Clasificador k-NN | Pendiente |
