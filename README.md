@@ -49,6 +49,15 @@ Abre la cámara a 640×480 (la misma resolución que la calibración; si no coin
 - `s`: guarda original, corregida y diferencia amplificada en `security/captures/`.
 - `q`: salir (imprime los FPS medios con y sin corrección).
 
+### Prueba de ajustes de la cámara (fase 2)
+
+```bash
+cd security
+python camera_settings.py
+```
+
+Prueba si el driver deja fijar el balance de blancos y la exposición. Muestra el Cr y Cb medios de la imagen (128 = neutro). Teclas: `w` balance de blancos auto/manual, `+`/`-` temperatura, `x` exposición auto/manual, `e`/`d` exposición, `p` ventana de ajustes del driver, `q` salir.
+
 ### Prueba del decodificador (sin cámara)
 
 ```bash
