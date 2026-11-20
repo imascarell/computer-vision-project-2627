@@ -36,14 +36,18 @@ pip install -r requirements.txt
 
 ## Uso
 
-### Cámara con FPS
+### Cámara con corrección de distorsión y FPS
 
 ```bash
 cd security
 python camera.py
 ```
 
-Abre la cámara a 640×480 y muestra los FPS en pantalla. Se cierra con `q`.
+Abre la cámara a 640×480 (la misma resolución que la calibración; si no coincide, se para con un error), corrige la distorsión con `calibration/calib.npz` y muestra los FPS. Los mapas de corrección se calculan una sola vez al arrancar y en cada frame solo se hace un `remap`.
+
+- `u`: alterna imagen corregida / original.
+- `s`: guarda original, corregida y diferencia amplificada en `security/captures/`.
+- `q`: salir (imprime los FPS medios con y sin corrección).
 
 ### Prueba del decodificador (sin cámara)
 
@@ -75,6 +79,15 @@ Calcula K, la distorsión y el RMS con las imágenes de `calibration/images/` y 
 Resultado actual (17 imágenes, 640×480, cuadro de 25 mm): **RMS = 0,114 px**, fx ≈ 578, fy ≈ 578, cx ≈ 315, cy ≈ 257, distorsión radial muy pequeña (k1 ≈ 0,009; k2 ≈ −0,045).
 `cornerSubPix` usa una ventana de 5 px porque los cuadros miden unos 12 px en la imagen; con 11 px el RMS sube a ≈ 5 px.
 
+### Figura de la corrección
+
+```bash
+cd calibration
+python distortion_map.py
+```
+
+Genera `calibration/mapa_desplazamiento.png`: cuánto mueve la corrección a cada píxel. Con esta cámara el máximo es de unos 2,9 px, en las esquinas, y es 0 en el centro, así que la imagen corregida apenas se distingue de la original a simple vista.
+
 ### Captura de imágenes
 
 ```bash
@@ -89,7 +102,7 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Propuesta | Hecha |
-| 1 | Base: cámara, FPS, calibración y undistort | En curso |
+| 1 | Base: cámara, FPS, calibración y undistort | Hecha; falta verificar FPS ≥ 25 en el portátil |
 | 2 | Segmentación de la mano | Pendiente |
 | 3 | Features y registro de plantillas | Pendiente |
 | 4 | Clasificador k-NN | Pendiente |
