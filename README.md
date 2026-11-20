@@ -56,7 +56,7 @@ cd security
 python camera_settings.py
 ```
 
-Prueba si el driver deja fijar el balance de blancos y la exposición. Muestra el Cr y Cb medios de la imagen (128 = neutro). Teclas: `w` balance de blancos auto/manual, `+`/`-` temperatura, `x` exposición auto/manual, `e`/`d` exposición, `p` ventana de ajustes del driver, `q` salir.
+Comprueba si el balance de blancos y la exposición quedan fijos cuando entra la mano: mide el brillo (Y) y el color (Cr, Cb) de un parche de pared y dice si es ESTABLE o INESTABLE. Teclas: `w` balance de blancos auto/manual, `+`/`-` temperatura, `x` exposición auto/manual, `e`/`d` exposición, `l` empezar/terminar la medición, `p` ventana de ajustes del driver, `q` salir.
 
 ### Prueba del decodificador (sin cámara)
 
