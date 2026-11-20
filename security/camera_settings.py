@@ -6,13 +6,18 @@
 # izquierda): si el ajuste esta fijo, su brillo (Y) y su color (Cr, Cb) no cambian aunque
 # muevas la mano por el resto de la imagen. Con una pared blanca o gris, Cr y Cb neutros = 128.
 #
-# Teclas: w     -> balance de blancos automatico ON/OFF
+# IMPORTANTE: las teclas solo funcionan con la ventana de la camara seleccionada (haz clic en ella).
+#
+# Teclas: w / a -> balance de blancos MANUAL / AUTOMATICO
 #         + / - -> temperatura de color (solo con balance manual)
-#         x     -> exposicion automatica ON/OFF
+#         x / z -> exposicion MANUAL / AUTOMATICA
 #         e / d -> subir / bajar la exposicion (solo con exposicion manual)
-#         l     -> empezar / terminar la medicion de estabilidad del parche
+#         l     -> medir la estabilidad del parche durante 10 s (termina sola)
 #         p     -> abrir la ventana de ajustes del driver (Windows)
 #         q     -> salir (imprime los valores finales)
+#
+# Los ajustes se quedan guardados en el driver entre ejecuciones: lo que se ve en pantalla
+# en la linea "Driver" es el estado REAL de la camara, no el que tu creas.
 
 import os
 import time
@@ -24,6 +29,7 @@ WIDTH = 640
 HEIGHT = 480
 N_FPS = 30
 PATCH = (10, 10, 90, 90)            # parche de pared: x, y, ancho, alto (arriba a la izquierda)
+MEASURE_SECONDS = 10               # duracion de la medicion de estabilidad
 MAX_RANGE_Y = 6                     # variacion maxima (max - min) para dar el parche por estable
 MAX_RANGE_CRCB = 3
 
@@ -96,11 +102,13 @@ def main():
     print("Resolucion real: %dx%d" % (w, h))
     show_props(cap, "valores iniciales")
 
-    wb_auto = True
-    expo_auto = True
     times = []
     recording = False
+    t_start = 0.0
     samples = []
+    frame_count = 0
+    real = (cap.get(cv2.CAP_PROP_AUTO_WB), cap.get(cv2.CAP_PROP_WB_TEMPERATURE),
+            cap.get(cv2.CAP_PROP_EXPOSURE))
     px, py, pw, ph = PATCH
 
     while True:
@@ -108,6 +116,7 @@ def main():
         if not ok:
             print("No se pudo leer un frame")
             break
+        frame_count = frame_count + 1
 
         # FPS sobre los ultimos N_FPS frames
         times.append(time.time())
@@ -117,6 +126,11 @@ def main():
         if len(times) > 1:
             fps = (len(times) - 1) / (times[-1] - times[0])
 
+        # Estado real del driver (se refresca cada 15 frames)
+        if frame_count % 15 == 0:
+            real = (cap.get(cv2.CAP_PROP_AUTO_WB), cap.get(cv2.CAP_PROP_WB_TEMPERATURE),
+                    cap.get(cv2.CAP_PROP_EXPOSURE))
+
         # Valores del parche de pared y saturacion de toda la imagen
         ycc = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
         patch = ycc[py:py + ph, px:px + pw].reshape(-1, 3)
@@ -124,32 +138,38 @@ def main():
         saturated = 100.0 * np.mean(ycc[:, :, 0] >= 250)
         if recording:
             samples.append((y_p, cr_p, cb_p))
+            if time.time() - t_start >= MEASURE_SECONDS:
+                recording = False
+                report_stability(samples)
 
         cv2.rectangle(frame, (px, py), (px + pw, py + ph), (0, 255, 0), 2)
         cv2.putText(frame, "FPS: %.1f   Saturado: %.1f%%" % (fps, saturated), (10, 125),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
         cv2.putText(frame, "Parche: Y %.0f  Cr %.0f  Cb %.0f" % (y_p, cr_p, cb_p), (10, 150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
-        cv2.putText(frame, "WB: %s  EXPO: %s  %s" % ("auto" if wb_auto else "manual",
-                                                     "auto" if expo_auto else "manual",
-                                                     "[MIDIENDO]" if recording else ""),
-                    (10, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+        cv2.putText(frame, "Driver: WB_auto %.0f  T %.0f  Expo %.0f" % real, (10, 175),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+        if recording:
+            left = MEASURE_SECONDS - (time.time() - t_start)
+            cv2.putText(frame, "MIDIENDO... %.0f s (mueve la mano)" % left, (10, 200),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         cv2.imshow("ajustes de camara", frame)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
         elif key == ord("w"):
-            wb_auto = not wb_auto
-            try_set(cap, "AUTO_WB", cv2.CAP_PROP_AUTO_WB, 1 if wb_auto else 0)
+            try_set(cap, "AUTO_WB", cv2.CAP_PROP_AUTO_WB, 0)
+        elif key == ord("a"):
+            try_set(cap, "AUTO_WB", cv2.CAP_PROP_AUTO_WB, 1)
         elif key == ord("+") or key == ord("-"):
             step = 200 if key == ord("+") else -200
             try_set(cap, "WB_TEMPERATURE", cv2.CAP_PROP_WB_TEMPERATURE,
                     cap.get(cv2.CAP_PROP_WB_TEMPERATURE) + step)
         elif key == ord("x"):
-            expo_auto = not expo_auto
-            try_set(cap, "AUTO_EXPOSURE", cv2.CAP_PROP_AUTO_EXPOSURE,
-                    EXPO_AUTO if expo_auto else EXPO_MANUAL)
+            try_set(cap, "AUTO_EXPOSURE", cv2.CAP_PROP_AUTO_EXPOSURE, EXPO_MANUAL)
+        elif key == ord("z"):
+            try_set(cap, "AUTO_EXPOSURE", cv2.CAP_PROP_AUTO_EXPOSURE, EXPO_AUTO)
         elif key == ord("e") or key == ord("d"):
             step = 1 if key == ord("e") else -1
             try_set(cap, "EXPOSURE", cv2.CAP_PROP_EXPOSURE,
@@ -158,11 +178,9 @@ def main():
             if not recording:
                 recording = True
                 samples = []
-                print("\nMidiendo... mueve la mano delante de la camara (sin tapar el parche verde); pulsa 'l' para terminar")
-            else:
-                recording = False
-                if len(samples) > 0:
-                    report_stability(samples)
+                t_start = time.time()
+                print("\nMidiendo %d s... mueve la mano delante de la camara (sin tapar el parche verde)"
+                      % MEASURE_SECONDS)
         elif key == ord("p"):
             cap.set(cv2.CAP_PROP_SETTINGS, 1)      # ventana de ajustes del driver
 

@@ -56,7 +56,7 @@ cd security
 python camera_settings.py
 ```
 
-Comprueba si el balance de blancos y la exposición quedan fijos cuando entra la mano: mide el brillo (Y) y el color (Cr, Cb) de un parche de pared y dice si es ESTABLE o INESTABLE. Teclas: `w` balance de blancos auto/manual, `+`/`-` temperatura, `x` exposición auto/manual, `e`/`d` exposición, `l` empezar/terminar la medición, `p` ventana de ajustes del driver, `q` salir.
+Comprueba si el balance de blancos y la exposición quedan fijos cuando entra la mano: mide durante 10 s el brillo (Y) y el color (Cr, Cb) de un parche estático y dice si es ESTABLE o INESTABLE. Las teclas solo funcionan con la ventana de la cámara seleccionada: `w`/`a` balance de blancos manual/automático, `+`/`-` temperatura, `x`/`z` exposición manual/automática, `e`/`d` exposición, `l` medir, `p` ventana de ajustes del driver, `q` salir. La línea "Driver" muestra el estado real de la cámara (los ajustes se quedan guardados entre ejecuciones).
 
 ### Prueba del decodificador (sin cámara)
 
