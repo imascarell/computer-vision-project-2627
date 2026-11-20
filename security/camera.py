@@ -13,9 +13,8 @@ import time
 import cv2
 import numpy as np
 
-CAM_INDEX = 0
-WIDTH = 640                # misma resolucion que en la calibracion
-HEIGHT = 480
+from cam import open_camera, driver_state, WIDTH, HEIGHT
+
 N_FPS = 30                 # frames que se promedian para los FPS en pantalla
 ALPHA = 0                  # 0 = la imagen corregida no tiene bordes negros
 DIFF_GAIN = 40             # amplificacion de la imagen de diferencia (la correccion es de ~2 px)
@@ -34,13 +33,6 @@ def load_maps():
     new_K, roi = cv2.getOptimalNewCameraMatrix(K, dist, size, ALPHA)
     map1, map2 = cv2.initUndistortRectifyMap(K, dist, None, new_K, size, cv2.CV_16SC2)
     return size, map1, map2
-
-
-def open_camera():
-    cap = cv2.VideoCapture(CAM_INDEX)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
-    return cap
 
 
 def save_capture(frame, corrected):
@@ -62,6 +54,7 @@ def main():
     if not cap.isOpened():
         print("No se pudo abrir la camara")
         return
+    print("Driver:", driver_state(cap))
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print("Resolucion pedida: %dx%d | real: %dx%d | calibracion: %dx%d"
