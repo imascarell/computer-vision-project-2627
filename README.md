@@ -47,6 +47,7 @@ Abre la cámara con `security/cam.py` (DirectShow en Windows, balance de blancos
 
 - `u`: alterna imagen corregida / original.
 - `s`: guarda original, corregida y diferencia amplificada en `security/captures/` (avisa si se detecta el tablero de calibración).
+- `c`: dibuja las esquinas del tablero de calibración y avisa si lo detecta (para las capturas).
 - `e` / `d`: sube / baja la exposición (si la imagen sale oscura, la pantalla avisa).
 - `q`: salir (imprime los FPS medios con y sin corrección).
 

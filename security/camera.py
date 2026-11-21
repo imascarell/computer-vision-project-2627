@@ -4,6 +4,8 @@
 # Teclas: u -> alterna imagen corregida / original
 #         s -> guarda original, corregida y diferencia amplificada en security/captures/
 #             (avisa en la terminal si en la imagen se detecta el tablero de calibracion)
+#         c -> activa/desactiva el dibujo de las esquinas del tablero de calibracion
+#             (solo para las capturas; con el dibujo activado los FPS bajan un poco)
 #         e / d -> subir / bajar la exposicion (si la imagen sale oscura)
 #         q -> salir
 #
@@ -20,6 +22,7 @@ from cam import open_camera, driver_state, WIDTH, HEIGHT
 N_FPS = 30                 # frames que se promedian para los FPS en pantalla
 ALPHA = 0                  # 0 = la imagen corregida no tiene bordes negros
 PATTERN = (6, 8)           # esquinas interiores del tablero de calibracion
+DETECT_FLAGS = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
 DARK_Y = 70                # por debajo de este brillo medio se avisa de imagen oscura
 DIFF_GAIN = 40             # amplificacion de la imagen de diferencia (la correccion es de ~2 px)
 
@@ -77,6 +80,7 @@ def main():
         return
 
     undistort_on = True
+    detect_on = False
     times = []                              # instantes de los ultimos frames
     frames_mode = {True: 0, False: 0}       # frames y tiempo acumulado por modo
     time_mode = {True: 0.0, False: 0.0}
@@ -107,6 +111,17 @@ def main():
             time_mode[undistort_on] += now - prev
         prev = now
 
+        if detect_on:
+            gray = cv2.cvtColor(view, cv2.COLOR_BGR2GRAY)
+            found, corners = cv2.findChessboardCorners(gray, PATTERN, DETECT_FLAGS)
+            if found:
+                cv2.drawChessboardCorners(view, PATTERN, corners, found)
+                cv2.putText(view, "Tablero detectado: pulsa 's'", (10, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            else:
+                cv2.putText(view, "Tablero NO detectado", (10, 100),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
         label = "CORREGIDA" if undistort_on else "ORIGINAL"
         cv2.putText(view, "FPS: %.1f  %s" % (fps, label), (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
@@ -122,6 +137,8 @@ def main():
             break
         elif key == ord("u"):
             undistort_on = not undistort_on
+        elif key == ord("c"):
+            detect_on = not detect_on
         elif key == ord("s"):
             save_capture(frame, cv2.remap(frame, map1, map2, cv2.INTER_LINEAR))
         elif key == ord("e") or key == ord("d"):
