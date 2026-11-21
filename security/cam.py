@@ -14,7 +14,7 @@ CAM_INDEX = 0
 WIDTH = 640                # misma resolucion que en la calibracion
 HEIGHT = 480
 WB_TEMPERATURE = 4000      # balance de blancos manual (K)
-EXPOSURE = -6              # exposicion manual (log2 de segundos: -6 = 1/64 s)
+EXPOSURE = -4              # exposicion manual (log2 de segundos: -4 = 1/16 s)
 
 
 def open_camera():

@@ -17,6 +17,8 @@ El plan detallado del sistema de seguridad está en [`docs/PLAN_SISTEMA_SEGURIDA
 │   ├── pattern/            # Patrón de calibración (PDF para imprimir)
 │   └── images/             # Fotos del patrón tomadas con la cámara de la demo
 ├── security/               # Sistema de seguridad
+│   ├── features.py         # Features de una máscara 64x64 (Hu, geometría, HOG)
+│   ├── register.py         # Registro del dataset de letras (C, U, B, I, L)
 │   ├── decoder.py          # Máquina de estados que decodifica la secuencia de signos
 │   ├── test_decoder.py     # Prueba del decodificador con etiquetas simuladas
 │   ├── data/               # Dataset de plantillas de las letras
@@ -43,7 +45,7 @@ cd security
 python camera.py
 ```
 
-Abre la cámara con `security/cam.py` (DirectShow en Windows, balance de blancos manual a 4000 K y exposición manual −6; con los ajustes automáticos el color del fondo se movía ~20 puntos en Cr al entrar la mano, y con estos ~2) a 640×480 (la misma resolución que la calibración; si no coincide, se para con un error), corrige la distorsión con `calibration/calib.npz` y muestra los FPS. Los mapas de corrección se calculan una sola vez al arrancar y en cada frame solo se hace un `remap`.
+Abre la cámara con `security/cam.py` (DirectShow en Windows, balance de blancos manual a 4000 K y exposición manual −4; con los ajustes automáticos el color del fondo se movía ~20 puntos en Cr al entrar la mano, y con estos ~2) a 640×480 (la misma resolución que la calibración; si no coincide, se para con un error), corrige la distorsión con `calibration/calib.npz` y muestra los FPS. Los mapas de corrección se calculan una sola vez al arrancar y en cada frame solo se hace un `remap`.
 
 - `u`: alterna imagen corregida / original.
 - `s`: guarda original, corregida y diferencia amplificada en `security/captures/` (avisa si se detecta el tablero de calibración).
@@ -76,6 +78,19 @@ Orden al arrancar:
 3. Poner un signo en la ROI y pulsar `s`: guarda una imagen por paso en `security/captures/seg_NN_*.png` (solo si hay mano).
 
 Otras teclas: `i` `k` `j` `l` mueven la ROI (invalida el fondo), `t` / `g` suben / bajan el umbral de la resta de fondo, `r` / `f` amplían / estrechan el margen de la piel, `e` / `d` cambian la exposición (invalida fondo y piel) y `q` sale e imprime los valores finales para copiarlos a las constantes. La pantalla avisa si el color del fondo cae dentro del rango de piel (entonces el umbral de piel no separa nada: más luz o `f`).
+
+### Features y registro del dataset (fase 3)
+
+```bash
+cd security
+python features.py        # prueba sin cámara con las 5 capturas elegidas de la fase 2
+python register.py        # graba data/dataset.npz (si existe, continúa)
+python register.py --resumen   # sin cámara: tabla de features y montaje (captures/dataset_montaje.png)
+```
+
+`features.py` calcula, sobre la máscara 64x64: 7 momentos de Hu (log), solidez, relación de aspecto, extensión, nº de defectos de convexidad (profundidad ≥ 3 px) y HOG (celda 8, bloque 16, 1764 valores).
+
+`register.py` graba 40 frames por letra (4 bloques de 10: centrada, más/menos antebrazo visible, giro a un lado, giro al otro). Mover la mano sin girarla no cambia la máscara 64x64 (el recorte se centra en la mano). Un frame se guarda solo si hay mano, no toca el borde de la ROI salvo por donde entra el antebrazo (abajo; derecha en la B), la mano está quieta (IoU ≥ 0,85 con el frame anterior durante 5 frames) y es distinta de la última guardada (IoU < 0,95). Teclas: `b` fondo, `p` piel, `1`-`5` letra (C U B I L), espacio empezar/pausar, `x` borrar la letra, `t`/`g` y `r`/`f` umbrales (solo sin grabar), `q` guardar y salir. El `.npz` guarda máscaras, etiquetas, features, bloque, rango de piel, umbral de resta, ROI y exposición. `--out nombre.npz` graba otro fichero (p. ej. otro día u otra luz, para evaluar en la fase 4).
 
 ### Prueba del decodificador (sin cámara)
 
@@ -131,8 +146,8 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 |---|---|---|
 | 0 | Propuesta | Hecha |
 | 1 | Base: cámara, FPS, calibración y undistort | Hecha (30 FPS con y sin corrección, RMS 0,114 px) |
-| 2 | Segmentación de la mano | En desarrollo (código escrito, falta probarlo con la cámara) |
-| 3 | Features y registro de plantillas | Pendiente |
+| 2 | Segmentación de la mano | Hecha (las 5 letras dan máscara limpia; capturas en `security/captures/seg_*`) |
+| 3 | Features y registro de plantillas | En desarrollo (código listo; falta grabar el dataset) |
 | 4 | Clasificador k-NN | Pendiente |
 | 5 | Integración | Pendiente |
 | 6 | Pruebas y métricas | Pendiente |
