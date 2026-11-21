@@ -1,7 +1,7 @@
 # features.py - Features de una mascara binaria 64x64 (Fase 3)
 #
 # extract(mask) devuelve (hu, geo, hog):
-#   hu  : 7 momentos de Hu en escala log (invariantes a traslacion, escala y giro)
+#   hu  : 7 momentos de Hu en escala log, sin signo (invariantes a traslacion, escala y giro)
 #   geo : [solidez, relacion de aspecto, extension, n defectos de convexidad]
 #   hog : HOG de la mascara (1764 valores), calculado a mano (OpenCV 5.1 ya no trae HOGDescriptor)
 #
@@ -33,10 +33,11 @@ def biggest_contour(mask):
 
 
 def hu_log(mask):
-    """7 momentos de Hu en log10 con signo (si no, los ultimos valen ~1e-20)."""
+    """7 momentos de Hu como -log10|h|. Se quita el signo: en Hu5, Hu6 y Hu7 cambia de un
+    frame a otro con la misma letra y ensanchaba mucho las distancias del k-NN."""
     moments = cv2.moments(mask, binaryImage=True)
     hu = cv2.HuMoments(moments).ravel()
-    return -np.sign(hu) * np.log10(np.abs(hu) + 1e-30)
+    return -np.log10(np.abs(hu) + 1e-30)
 
 
 def geometry(contour):

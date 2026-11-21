@@ -8,6 +8,7 @@
 # Uso:  python register.py                 graba en data/dataset.npz (si existe, continua)
 #       python register.py --out test_x.npz   otro fichero (p. ej. grabacion de otro dia / luz)
 #       python register.py --resumen       sin camara: tabla de features y montaje del fichero
+#       python register.py --recalcular    sin camara: recalcula las features desde las mascaras guardadas
 #
 # Orden al arrancar (la pantalla indica siempre el siguiente paso):
 #   1) quita la mano de la ROI y pulsa b       -> fondo de referencia
@@ -158,8 +159,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="dataset.npz", help="nombre del fichero dentro de data/")
     parser.add_argument("--resumen", action="store_true", help="solo resumen y montaje (sin camara)")
+    parser.add_argument("--recalcular", action="store_true",
+                        help="recalcula Hu, geometria y HOG desde las mascaras (sin camara)")
     args = parser.parse_args()
     path = os.path.join(DATA_DIR, args.out)
+
+    if args.recalcular:
+        rows, roi, expo = load(path)
+        for r in rows:
+            r["hu"], r["geo"], r["hog"] = extract(r["mask"])
+        save(path, rows, roi, expo)
+        print("Features recalculadas para %d muestras en %s" % (len(rows), path))
+        show_summary(path)
+        return
 
     if args.resumen:
         show_summary(path)
