@@ -47,7 +47,7 @@ Abre la cámara con `security/cam.py` (DirectShow en Windows, balance de blancos
 
 - `u`: alterna imagen corregida / original.
 - `s`: guarda original, corregida y diferencia amplificada en `security/captures/` (avisa si se detecta el tablero de calibración).
-- `c`: dibuja las esquinas del tablero de calibración y avisa si lo detecta (para las capturas).
+- `c`: dibuja las esquinas del tablero de calibración y avisa si lo detecta (para las capturas). Prueba 6×9 y 6×8 esquinas interiores (`PATTERNS` en `camera.py`).
 - `e` / `d`: sube / baja la exposición (si la imagen sale oscura, la pantalla avisa).
 - `q`: salir (imprime los FPS medios con y sin corrección).
 
@@ -60,14 +60,22 @@ python camera_settings.py
 
 Comprueba si el balance de blancos y la exposición quedan fijos cuando entra la mano: mide durante 10 s el brillo (Y) y el color (Cr, Cb) de un parche estático y dice si es ESTABLE o INESTABLE. Las teclas solo funcionan con la ventana de la cámara seleccionada: `w`/`a` balance de blancos manual/automático, `+`/`-` temperatura, `x`/`z` exposición manual/automática, `e`/`d` exposición, `l` medir, `p` ventana de ajustes del driver, `q` salir. La línea "Driver" muestra el estado real de la cámara (los ajustes se quedan guardados entre ejecuciones).
 
-### Segmentación de la mano (fase 2, en desarrollo)
+### Segmentación de la mano (fase 2)
 
 ```bash
 cd security
 python segmentation.py
 ```
 
-Por ahora muestra la cámara corregida con una ROI (recuadro amarillo) y el recorte de la ROI en otra ventana. `w` `a` `s` `d` mueven la ROI; al salir con `q` imprime su valor para copiarlo a `ROI` en el código. Los pasos siguientes (fondo de referencia, piel, morfología, contorno y máscara 64×64) se añaden en este mismo archivo.
+Pipeline sobre la ROI: YCrCb → piel (umbral en Cr y Cb) → resta del fondo de referencia → AND de ambas → morfología (apertura + cierre) → contorno mayor relleno → recorte cuadrado → máscara binaria 64×64. La ventana `pasos` muestra los 7 pasos a la vez y la ventana `segmentacion` indica siempre el siguiente paso.
+
+Orden al arrancar:
+
+1. Quitar la mano de la ROI y pulsar `b`: promedia 30 frames como fondo de referencia.
+2. Poner la palma sobre el cuadrado cian y pulsar `p`: calibra el Cr/Cb de la piel (centro ± max(3 desviaciones, margen mínimo)) con 15 frames.
+3. Poner un signo en la ROI y pulsar `s`: guarda una imagen por paso en `security/captures/seg_NN_*.png` (solo si hay mano).
+
+Otras teclas: `i` `k` `j` `l` mueven la ROI (invalida el fondo), `t` / `g` suben / bajan el umbral de la resta de fondo, `r` / `f` amplían / estrechan el margen de la piel, `e` / `d` cambian la exposición (invalida fondo y piel) y `q` sale e imprime los valores finales para copiarlos a las constantes. La pantalla avisa si el color del fondo cae dentro del rango de piel (entonces el umbral de piel no separa nada: más luz o `f`).
 
 ### Prueba del decodificador (sin cámara)
 
@@ -123,7 +131,7 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 |---|---|---|
 | 0 | Propuesta | Hecha |
 | 1 | Base: cámara, FPS, calibración y undistort | Hecha (30 FPS con y sin corrección, RMS 0,114 px) |
-| 2 | Segmentación de la mano | Pendiente |
+| 2 | Segmentación de la mano | En desarrollo (código escrito, falta probarlo con la cámara) |
 | 3 | Features y registro de plantillas | Pendiente |
 | 4 | Clasificador k-NN | Pendiente |
 | 5 | Integración | Pendiente |
