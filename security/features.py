@@ -3,7 +3,7 @@
 # extract(mask) devuelve (hu, geo, hog):
 #   hu  : 7 momentos de Hu en escala log (invariantes a traslacion, escala y giro)
 #   geo : [solidez, relacion de aspecto, extension, n defectos de convexidad]
-#   hog : HOG de la mascara (1764 valores)
+#   hog : HOG de la mascara (1764 valores), calculado a mano (OpenCV 5.1 ya no trae HOGDescriptor)
 #
 # La misma funcion se usa para grabar el dataset y (mas adelante) en la demo.
 #
@@ -17,11 +17,8 @@ import numpy as np
 
 OUT = 64                   # lado de la mascara
 MIN_DEPTH = 3.0            # profundidad minima (px de la mascara 64x64) de un defecto de convexidad
+CELL = 8                   # lado de la celda del HOG (px)
 GEO_NAMES = ["solidez", "aspecto", "extension", "defectos"]
-
-# HOG: ventana 64x64, bloque 16x16, paso 8, celda 8, 9 orientaciones
-# -> 7 x 7 bloques x 4 celdas x 9 = 1764 valores
-_hog = cv2.HOGDescriptor((OUT, OUT), (16, 16), (8, 8), (8, 8), 9)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # captura -> letra (las 5 elegidas en la Fase 2)
@@ -65,6 +62,35 @@ def geometry(contour):
     return np.array([solidity, aspect, extent, n_defects], np.float32)
 
 
+def hog(mask):
+    """HOG a mano: celdas de 8x8, 9 orientaciones (0-180 grados), bloques de 2x2 celdas
+    con paso de 1 celda y normalizacion L2 -> 7 x 7 bloques x 4 celdas x 9 = 1764 valores."""
+    img = mask.astype(np.float32) / 255.0
+    # gradiente con la diferencia centrada [-1, 0, 1] (los bordes de la imagen quedan en 0)
+    gx = np.zeros_like(img)
+    gy = np.zeros_like(img)
+    gx[:, 1:-1] = img[:, 2:] - img[:, :-2]
+    gy[1:-1, :] = img[2:, :] - img[:-2, :]
+    mag = np.sqrt(gx ** 2 + gy ** 2)
+    ang = np.degrees(np.arctan2(gy, gx)) % 180            # orientacion sin signo
+    bins = np.minimum((ang / 20).astype(int), 8)          # 9 bins de 20 grados
+
+    # histograma de cada celda: cada pixel vota con su magnitud en su bin
+    n = OUT // CELL                                       # 8 celdas por lado
+    hist = np.zeros((n, n, 9), np.float32)
+    for b in range(9):
+        votes = np.where(bins == b, mag, 0).reshape(n, CELL, n, CELL)
+        hist[:, :, b] = votes.sum(axis=(1, 3))
+
+    # bloques de 2x2 celdas normalizados
+    blocks = []
+    for by in range(n - 1):
+        for bx in range(n - 1):
+            v = hist[by:by + 2, bx:bx + 2].ravel()
+            blocks.append(v / np.sqrt(np.sum(v ** 2) + 1e-6))
+    return np.concatenate(blocks).astype(np.float32)
+
+
 def extract(mask):
     """mask: uint8 64x64 con valores 0 / 255. Devuelve (hu, geo, hog) o None si esta vacia."""
     contour = biggest_contour(mask)
@@ -72,8 +98,8 @@ def extract(mask):
         return None
     hu = hu_log(mask).astype(np.float32)
     geo = geometry(contour)
-    hog = _hog.compute(mask).ravel().astype(np.float32)
-    return hu, geo, hog
+    hog_vec = hog(mask)
+    return hu, geo, hog_vec
 
 
 def main():
@@ -94,10 +120,10 @@ def main():
         if res is None:
             print("%-10s mascara vacia" % name)
             continue
-        hu, geo, hog = res
+        hu, geo, hog_vec = res
         print("%-10s %6d | %9.3f %9.3f %9.3f %9d | %s   (HOG: %d valores)"
               % (name, np.count_nonzero(mask), geo[0], geo[1], geo[2], geo[3],
-                 " ".join("%5.2f" % v for v in hu), len(hog)))
+                 " ".join("%5.2f" % v for v in hu), len(hog_vec)))
 
 
 if __name__ == "__main__":

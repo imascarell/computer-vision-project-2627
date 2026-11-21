@@ -88,7 +88,7 @@ python register.py        # graba data/dataset.npz (si existe, continúa)
 python register.py --resumen   # sin cámara: tabla de features y montaje (captures/dataset_montaje.png)
 ```
 
-`features.py` calcula, sobre la máscara 64x64: 7 momentos de Hu (log), solidez, relación de aspecto, extensión, nº de defectos de convexidad (profundidad ≥ 3 px) y HOG (celda 8, bloque 16, 1764 valores).
+`features.py` calcula, sobre la máscara 64x64: 7 momentos de Hu (log), solidez, relación de aspecto, extensión, nº de defectos de convexidad (profundidad ≥ 3 px) y HOG (celda 8, bloque 16, 1764 valores). El HOG se calcula a mano con numpy (gradiente [-1,0,1], 9 orientaciones sin signo, bloques 2x2 celdas con norma L2) porque OpenCV 5.1 ya no incluye `HOGDescriptor`.
 
 `register.py` graba 40 frames por letra (4 bloques de 10: centrada, más/menos antebrazo visible, giro a un lado, giro al otro). Mover la mano sin girarla no cambia la máscara 64x64 (el recorte se centra en la mano). Un frame se guarda solo si hay mano, no toca el borde de la ROI salvo por donde entra el antebrazo (abajo; derecha en la B), la mano está quieta (IoU ≥ 0,85 con el frame anterior durante 5 frames) y es distinta de la última guardada (IoU < 0,95). Teclas: `b` fondo, `p` piel, `1`-`5` letra (C U B I L), espacio empezar/pausar, `x` borrar la letra, `t`/`g` y `r`/`f` umbrales (solo sin grabar), `q` guardar y salir. El `.npz` guarda máscaras, etiquetas, features, bloque, rango de piel, umbral de resta, ROI y exposición. `--out nombre.npz` graba otro fichero (p. ej. otro día u otra luz, para evaluar en la fase 4).
 
