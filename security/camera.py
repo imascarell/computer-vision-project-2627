@@ -21,7 +21,7 @@ from cam import open_camera, driver_state, WIDTH, HEIGHT
 
 N_FPS = 30                 # frames que se promedian para los FPS en pantalla
 ALPHA = 0                  # 0 = la imagen corregida no tiene bordes negros
-PATTERN = (6, 9)           # esquinas interiores del tablero actual (7x10 cuadros, patron_10x7_25mm.pdf en vertical)
+PATTERNS = [(6, 9), (6, 8)]  # esquinas interiores de los tableros posibles (7x10 y 7x9 cuadros); se prueba cada uno
 DETECT_FLAGS = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
 DARK_Y = 70                # por debajo de este brillo medio se avisa de imagen oscura
 DIFF_GAIN = 40             # amplificacion de la imagen de diferencia (la correccion es de ~2 px)
@@ -42,6 +42,15 @@ def load_maps():
     return size, map1, map2
 
 
+def find_board(gray, flags):
+    """Busca el tablero probando cada patron. Devuelve (encontrado, esquinas, patron)."""
+    for pattern in PATTERNS:
+        found, corners = cv2.findChessboardCorners(gray, pattern, flags)
+        if found:
+            return True, corners, pattern
+    return False, None, None
+
+
 def save_capture(frame, corrected):
     """Guarda original, corregida y diferencia amplificada (para el informe)."""
     diff = cv2.absdiff(frame, corrected)
@@ -54,9 +63,9 @@ def save_capture(frame, corrected):
     print("Guardadas las 3 imagenes: %s_*.png" % base)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
-    found, _ = cv2.findChessboardCorners(gray, PATTERN, flags)
+    found, _, pattern = find_board(gray, flags)
     if found:
-        print("  Tablero detectado en la imagen: OK")
+        print("  Tablero detectado en la imagen: OK (patron %dx%d)" % pattern)
     else:
         print("  AVISO: no se detecta el tablero en esta imagen (borra estos 3 archivos y repite)")
 
@@ -113,10 +122,10 @@ def main():
 
         if detect_on:
             gray = cv2.cvtColor(view, cv2.COLOR_BGR2GRAY)
-            found, corners = cv2.findChessboardCorners(gray, PATTERN, DETECT_FLAGS)
+            found, corners, pattern = find_board(gray, DETECT_FLAGS)
             if found:
-                cv2.drawChessboardCorners(view, PATTERN, corners, found)
-                cv2.putText(view, "Tablero detectado: pulsa 's'", (10, 100),
+                cv2.drawChessboardCorners(view, pattern, corners, found)
+                cv2.putText(view, "Tablero %dx%d detectado: pulsa 's'" % pattern, (10, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             else:
                 cv2.putText(view, "Tablero NO detectado", (10, 100),
