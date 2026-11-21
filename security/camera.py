@@ -21,7 +21,7 @@ from cam import open_camera, driver_state, WIDTH, HEIGHT
 
 N_FPS = 30                 # frames que se promedian para los FPS en pantalla
 ALPHA = 0                  # 0 = la imagen corregida no tiene bordes negros
-PATTERN = (6, 8)           # esquinas interiores del tablero de calibracion
+PATTERN = (6, 9)           # esquinas interiores del tablero actual (7x10 cuadros, patron_10x7_25mm.pdf en vertical)
 DETECT_FLAGS = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
 DARK_Y = 70                # por debajo de este brillo medio se avisa de imagen oscura
 DIFF_GAIN = 40             # amplificacion de la imagen de diferencia (la correccion es de ~2 px)
