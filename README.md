@@ -46,7 +46,8 @@ python camera.py
 Abre la cámara con `security/cam.py` (DirectShow en Windows, balance de blancos manual a 4000 K y exposición manual −6; con los ajustes automáticos el color del fondo se movía ~20 puntos en Cr al entrar la mano, y con estos ~2) a 640×480 (la misma resolución que la calibración; si no coincide, se para con un error), corrige la distorsión con `calibration/calib.npz` y muestra los FPS. Los mapas de corrección se calculan una sola vez al arrancar y en cada frame solo se hace un `remap`.
 
 - `u`: alterna imagen corregida / original.
-- `s`: guarda original, corregida y diferencia amplificada en `security/captures/`.
+- `s`: guarda original, corregida y diferencia amplificada en `security/captures/` (avisa si se detecta el tablero de calibración).
+- `e` / `d`: sube / baja la exposición (si la imagen sale oscura, la pantalla avisa).
 - `q`: salir (imprime los FPS medios con y sin corrección).
 
 ### Prueba de ajustes de la cámara (fase 2)

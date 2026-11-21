@@ -3,6 +3,8 @@
 # Uso:  python camera.py
 # Teclas: u -> alterna imagen corregida / original
 #         s -> guarda original, corregida y diferencia amplificada en security/captures/
+#             (avisa en la terminal si en la imagen se detecta el tablero de calibracion)
+#         e / d -> subir / bajar la exposicion (si la imagen sale oscura)
 #         q -> salir
 #
 # Al salir se imprimen los FPS medios con la correccion activada y desactivada.
@@ -17,6 +19,8 @@ from cam import open_camera, driver_state, WIDTH, HEIGHT
 
 N_FPS = 30                 # frames que se promedian para los FPS en pantalla
 ALPHA = 0                  # 0 = la imagen corregida no tiene bordes negros
+PATTERN = (6, 8)           # esquinas interiores del tablero de calibracion
+DARK_Y = 70                # por debajo de este brillo medio se avisa de imagen oscura
 DIFF_GAIN = 40             # amplificacion de la imagen de diferencia (la correccion es de ~2 px)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +49,13 @@ def save_capture(frame, corrected):
     cv2.imwrite(base + "_corregida.png", corrected)
     cv2.imwrite(base + "_diferencia.png", diff)
     print("Guardadas las 3 imagenes: %s_*.png" % base)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
+    found, _ = cv2.findChessboardCorners(gray, PATTERN, flags)
+    if found:
+        print("  Tablero detectado en la imagen: OK")
+    else:
+        print("  AVISO: no se detecta el tablero en esta imagen (borra estos 3 archivos y repite)")
 
 
 def main():
@@ -99,6 +110,11 @@ def main():
         label = "CORREGIDA" if undistort_on else "ORIGINAL"
         cv2.putText(view, "FPS: %.1f  %s" % (fps, label), (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(view, "Expo: %.0f" % cap.get(cv2.CAP_PROP_EXPOSURE), (10, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        if frame.mean() < DARK_Y:
+            cv2.putText(view, "IMAGEN OSCURA: mas luz o pulsa 'e'", (10, 75),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         cv2.imshow("camera", view)
 
         key = cv2.waitKey(1) & 0xFF
@@ -108,6 +124,10 @@ def main():
             undistort_on = not undistort_on
         elif key == ord("s"):
             save_capture(frame, cv2.remap(frame, map1, map2, cv2.INTER_LINEAR))
+        elif key == ord("e") or key == ord("d"):
+            new = cap.get(cv2.CAP_PROP_EXPOSURE) + (1 if key == ord("e") else -1)
+            cap.set(cv2.CAP_PROP_EXPOSURE, new)
+            print("Exposicion pedida %.0f | leida %.0f" % (new, cap.get(cv2.CAP_PROP_EXPOSURE)))
 
     cap.release()
     cv2.destroyAllWindows()
