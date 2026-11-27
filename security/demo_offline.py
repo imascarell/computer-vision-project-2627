@@ -1,9 +1,8 @@
 # demo_offline.py - Prueba de la Fase 5 SIN camara
 #
-# Alimenta la misma logica que demo.py (clasificador + decoder + modo administrador + teclas)
+# Alimenta la misma logica que demo.py (clasificador + decoder + teclas)
 # con mascaras del dataset, y el bucle completo de demo.py con una camara simulada.
 # Los datos son los de entrenamiento: esto valida la LOGICA, no la precision (eso es la Fase 6).
-# No toca data/clave.txt: usa un fichero temporal.
 #
 # Uso:  python demo_offline.py
 
@@ -30,7 +29,6 @@ MASKS = {l: data["masks"][data["labels"] == l] for l in demo.LETTERS}
 CIRCLE = np.zeros((64, 64), np.uint8)
 cv2.circle(CIRCLE, (32, 32), 22, 255, -1)          # forma que el clasificador rechaza ("?")
 clf = Classifier.load(demo.MODEL_FILE)
-TMP_KEY = os.path.join(tempfile.mkdtemp(), "clave.txt")
 
 
 def reset_params():
@@ -40,9 +38,7 @@ def reset_params():
 
 def new_session():
     reset_params()
-    if os.path.exists(TMP_KEY):
-        os.remove(TMP_KEY)
-    return demo.Session(clf, TMP_KEY)
+    return demo.Session(clf)
 
 
 def feed(sess, letters, t, hold=20, gap=12, noise=False, circle=False):
@@ -127,29 +123,19 @@ t += decoder.TIMEOUT + 0.5
 assert s.process(None, t) == "TIMEOUT" and len(s.dec.entered) == 0
 print("6) timeout borra la secuencia")
 
-# 7) modo administrador
+# 7) CUBIL es la unica clave: ninguna tecla la cambia ni acepta otra
 s = new_session()
-s.handle_key(ord("n"), t)
-assert s.enroll is None                                  # sin GRANTED no entra
-ev, t = feed(s, "CUBIL", t)
-s.handle_key(ord("n"), t)
-assert s.enroll is not None
-ev, t = feed(s, "LLUBC", t)                              # clave nueva con letra repetida
-assert s.new_key == list("LLUBC"), s.new_key
-s.handle_key(27, t)                                      # ESC: cancela y mantiene la antigua
-assert s.enroll is None and decoder.KEY == list("CUBIL") and not os.path.exists(TMP_KEY)
-s.handle_key(ord("n"), t)
+for k in "nN\r\x1b":
+    s.handle_key(ord(k), t)
+assert decoder.KEY == list("CUBIL")
 ev, t = feed(s, "LLUBC", t)
-s.handle_key(13, t)                                      # ENTER: guarda
-assert decoder.KEY == list("LLUBC") and open(TMP_KEY).read().strip() == "LLUBC"
-assert s.dec.key_state == "INPUT"
+assert ev[-1] == "DENIED"
+s = new_session()
 ev, t = feed(s, "CUBIL", t)
-assert ev[-1] == "DENIED"                                # la clave vieja ya no vale
-s2 = demo.Session(clf, TMP_KEY)                          # "reinicio": la clave se lee del fichero
-assert decoder.KEY == list("LLUBC")
-ev, t = feed(s2, "LLUBC", t)
 assert ev[-1] == "GRANTED"
-print("7) modo n: ESC cancela; ENTER guarda LLUBC; CUBIL denegada; tras reiniciar LLUBC concede")
+s.handle_key(ord("n"), t)                                # n no hace nada
+assert s.dec.key_state == "GRANTED" and decoder.KEY == list("CUBIL")
+print("7) la tecla n no cambia la clave; solo CUBIL concede")
 
 # 8) ajuste de parametros en vivo (con limites)
 s = new_session()
@@ -199,9 +185,9 @@ print("    segment+features+clasificador: %.1f ms/frame (este entorno, orientati
 
 # 11) bucle completo de demo.main() con camara simulada
 reset_params()
-demo.KEY_FILE = TMP_KEY
-if os.path.exists(TMP_KEY):
-    os.remove(TMP_KEY)
+_tmp = tempfile.mkdtemp()
+demo.LOG_FILE = os.path.join(_tmp, "intentos.csv")
+demo.FPS_FILE = os.path.join(_tmp, "fps.csv")
 rois = {l: cv2.imread(os.path.join(HERE, "captures", "seg_%02d_01_roi.png" % n)) for l, n in DEFAULT_CAPTURES}
 hands = {l: cv2.imread(os.path.join(HERE, "captures", "seg_%02d_05_morfologia.png" % n), 0) > 0
          for l, n in DEFAULT_CAPTURES}
@@ -295,5 +281,37 @@ cv2.imwrite(os.path.join(tempfile.gettempdir(), "demo_granted.png"), last["demo"
 sess, last = run_fake("CUBLI")
 print("    CUBLI:", sess.dec.key_state)
 assert sess.dec.key_state == "DENIED"
+
+# 12) registro de intentos y metricas (CSV temporal)
+import subprocess
+import sys
+tmp = os.path.join(tempfile.mkdtemp(), "intentos.csv")
+reset_params()
+s = demo.Session(clf, tmp)
+s.handle_key(ord("c"), t)
+ev, t = feed(s, "CUBIL", t)                                   # correcta aceptada
+s.handle_key(ord("r"), t)
+ev, t = feed(s, "CUBLI", t)                                   # tipo correcta pero falla
+t += decoder.DENIED_TIME + 0.1
+s.process(None, t)
+s.handle_key(ord("x"), t)
+ev, t = feed(s, "LIBUC", t)                                   # incorrecta rechazada
+t += decoder.DENIED_TIME + 0.1
+s.process(None, t)
+ev, t = feed(s, "CU", t)                                      # incorrecta: timeout
+t += decoder.TIMEOUT + 0.5
+s.process(None, t)
+rows = open(tmp).read().strip().split("\n")
+assert rows[0] == demo.LOG_HEADER and len(rows) == 5, rows
+cols = [r.split(",") for r in rows[1:]]
+assert [(c[1], c[2], c[4]) for c in cols] == [("correcta", "GRANTED", "CUBIL"),
+    ("correcta", "DENIED", "CUBLI"), ("incorrecta", "DENIED", "LIBUC"), ("incorrecta", "TIMEOUT", "CU")], cols
+assert abs(float(cols[0][3]) - 142 * DT) < 0.05               # 4 signos de 32 frames + 15 del ultimo = 142 frames
+assert s.counts == {"correcta": 2, "incorrecta": 2}
+out = subprocess.run([sys.executable, os.path.join(HERE, "metricas.py"), tmp], capture_output=True, text=True).stdout
+assert "FRR = 1 / 2 = 50.0 %" in out and "FAR = 0 / 2 = 0.0 %" in out, out
+print("12) registro de intentos y metricas OK (4 intentos: GRANTED, DENIED, DENIED, TIMEOUT)")
+print(out)
+reset_params()
 
 print("TODO OK")

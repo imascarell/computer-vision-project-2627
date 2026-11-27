@@ -7,15 +7,15 @@
 # Orden al arrancar (la pantalla indica siempre el siguiente paso):
 #   1) quita la mano de la ROI y pulsa b       -> fondo de referencia
 #   2) palma sobre el cuadrado cian y pulsa p  -> color de tu piel
-#   3) haz los 5 signos de la clave (por defecto C U B I L)
+#   3) haz los 5 signos de la clave (C U B I L)
 #
 # Teclas:
 #   b, p     fondo y piel (como en segmentation.py)
 #   r        reset de la secuencia (tras ACCESO CONCEDIDO vuelve a pedir la clave;
 #            durante el BLOQUEO no hace nada)
-#   n        modo administrador: nueva clave (solo con ACCESO CONCEDIDO).
-#            Haz los 5 signos; ENTER guarda, ESC cancela, r repite
-#   q        salir (imprime los FPS medios)
+#   c / x    la siguiente prueba es con la clave CORRECTA / INCORRECTA (fase 6): cada intento
+#            terminado (GRANTED, DENIED, LOCKED o TIMEOUT) se guarda en results/intentos.csv
+#   q        salir (imprime los FPS medios y los guarda en results/fps.csv)
 #   Parametros del decodificador en vivo:
 #   1 / 2    ventana N      -1 / +1 frames
 #   3 / 4    ratio mayoria  -0.05 / +0.05
@@ -23,7 +23,7 @@
 #   7 / 8    timeout        -0.5 / +0.5 s
 #   9 / 0    tau del clasificador  -0.02 / +0.02
 #
-# La clave nueva se guarda en data/clave.txt (si no existe, se usa CUBIL).
+# La unica clave valida es CUBIL (constante KEY de decoder.py).
 
 import os
 import time
@@ -40,31 +40,27 @@ from features import extract
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_FILE = os.path.join(HERE, "data", "modelo.npz")
-KEY_FILE = os.path.join(HERE, "data", "clave.txt")
 LETTERS = ["C", "U", "B", "I", "L"]
-DEFAULT_KEY = ["C", "U", "B", "I", "L"]
-KEY_LEN = 5
 NOTE_TIME = 3.0            # segundos que se ve un aviso en pantalla
 N_FPS = 30                 # frames para los FPS en pantalla
+LOG_FILE = os.path.join(HERE, "results", "intentos.csv")      # un intento por fila (fase 6)
+FPS_FILE = os.path.join(HERE, "results", "fps.csv")           # FPS medios de cada ejecucion
+LOG_HEADER = "fecha,tipo,resultado,segundos,secuencia"
+FPS_HEADER = "fecha,fps_medios,ms_por_frame"
+END_EVENTS = ("GRANTED", "DENIED", "LOCKED", "TIMEOUT")        # eventos que cierran un intento
 
 
-# ---------------------------------------------------------------- clave
-def load_key(path):
-    """Lee la clave de un fichero. Si no existe o no es valida, devuelve CUBIL."""
-    if not os.path.exists(path):
-        return list(DEFAULT_KEY)
-    with open(path) as f:
-        text = f.read().strip().upper()
-    key = list(text)
-    if len(key) != KEY_LEN or any(c not in LETTERS for c in key):
-        print("AVISO: %s no tiene una clave valida: se usa CUBIL" % path)
-        return list(DEFAULT_KEY)
-    return key
-
-
-def save_key(path, key):
-    with open(path, "w") as f:
-        f.write("".join(key) + "\n")
+# ---------------------------------------------------------------- registro de pruebas
+def append_row(path, header, line):
+    """Anade una fila al CSV (crea la carpeta y la cabecera si hace falta)."""
+    folder = os.path.dirname(path)
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+    new = not os.path.exists(path)
+    with open(path, "a") as f:
+        if new:
+            f.write(header + "\n")
+        f.write(line + "\n")
 
 
 # ---------------------------------------------------------------- por frame
@@ -124,18 +120,19 @@ def params_text(clf):
 
 # ---------------------------------------------------------------- sesion
 class Session:
-    """Junta el decodificador, el modo administrador y las teclas.
-    No usa la camara: se puede probar con etiquetas (demo_offline.py)."""
+    """Junta el decodificador, las teclas y el registro de intentos. No usa la camara:
+    se puede probar con etiquetas (demo_offline.py). La clave es siempre CUBIL (decoder.KEY).
+    log_file: CSV donde se guarda cada intento (None = no se guarda)."""
 
-    def __init__(self, clf, key_file=None):
+    def __init__(self, clf, log_file=None):
         self.clf = clf
-        self.key_file = key_file if key_file else KEY_FILE
-        decoder.KEY = load_key(self.key_file)
+        self.log_file = log_file
         self.dec = SequenceDecoder()
-        self.enroll = None         # decodificador temporal del modo administrador
-        self.new_key = None        # clave nueva completa, pendiente de ENTER / ESC
         self.note = ""
         self.note_time = -100.0
+        self.kind = ""             # "correcta" / "incorrecta": lo que se intenta en esta prueba
+        self.counts = {"correcta": 0, "incorrecta": 0}
+        self.t_start = None        # instante en que aparece la mano al empezar un intento
 
     def say(self, text, now):
         self.note = text
@@ -143,56 +140,53 @@ class Session:
 
     def process(self, label, now):
         """Procesa un frame. Devuelve el evento del decodificador (o None)."""
-        if self.enroll is None:
-            return self.dec.update(label, now)
-        if self.new_key is None:
-            self.enroll.update(label, now)
-            if len(self.enroll.entered) == KEY_LEN:      # copiar ya: el temporal se reinicia solo
-                self.new_key = list(self.enroll.entered)
-        return None
+        if self.t_start is None and label is not None and self.dec.key_state == "INPUT":
+            self.t_start = now
+        before = "".join(self.dec.entered)          # el TIMEOUT borra los signos al devolverse
+        event = self.dec.update(label, now)
+        if event in END_EVENTS:
+            seq = before if event == "TIMEOUT" else "".join(self.dec.entered)
+            self.log_attempt(event, seq, now)
+        return event
+
+    def log_attempt(self, event, seq, now):
+        secs = 0.0
+        if self.t_start is not None:
+            secs = now - self.t_start
+        kind = self.kind if self.kind else "libre"
+        if kind in self.counts:
+            self.counts[kind] += 1
+        if self.log_file:
+            line = "%s,%s,%s,%.2f,%s" % (time.strftime("%Y-%m-%d %H:%M:%S"), kind, event, secs, seq)
+            append_row(self.log_file, LOG_HEADER, line)
+        self.say("Intento (%s): %s %s %.1fs" % (kind, event, seq, secs), now)
+        self.t_start = None
 
     def handle_key(self, key, now):
         """Procesa una tecla (codigo de waitKey). Devuelve True si hay que salir."""
         if key == ord("q"):
             return True
         if key == ord("r"):
-            if self.enroll is not None:
-                self.enroll = SequenceDecoder()
-                self.new_key = None
-                self.say("Admin: secuencia reiniciada", now)
-            elif self.dec.key_state == "LOCKED":
+            if self.dec.key_state == "LOCKED":
                 self.say("Bloqueado: espera a que termine", now)
             else:
                 self.dec.key_state = "INPUT"
                 self.dec.message = ""
                 self.dec.reset_sequence(now)
-        elif key == ord("n"):
-            if self.enroll is not None:
-                pass
-            elif self.dec.key_state == "GRANTED":
-                self.enroll = SequenceDecoder()
-                self.new_key = None
-                self.say("Modo admin: haz los 5 signos de la clave nueva", now)
-            else:
-                self.say("n solo funciona con ACCESO CONCEDIDO", now)
-        elif key == 13 and self.new_key is not None:           # ENTER
-            decoder.KEY = self.new_key
-            save_key(self.key_file, self.new_key)
-            self.enroll = None
-            self.new_key = None
-            self.dec = SequenceDecoder()                        # vuelve a pedir la clave
-            self.say("Clave guardada", now)
-        elif key == 27 and self.enroll is not None:            # ESC
-            self.enroll = None
-            self.new_key = None
-            self.say("Admin cancelado", now)
+                self.t_start = None
+        elif key == ord("c"):
+            self.kind = "correcta"
+            self.say("Prueba: clave CORRECTA", now)
+        elif key == ord("x"):
+            self.kind = "incorrecta"
+            self.say("Prueba: clave INCORRECTA", now)
         else:
             adjust_params(key, self.clf)                        # la linea de parametros se actualiza sola
         return False
 
 
 def draw_extra(view, sess, now, roi, dist, hint):
-    """Textos que no dibuja decoder.draw_overlay: parametros, avisos, distancia y modo admin."""
+    """Textos que no dibuja decoder.draw_overlay: parametros, avisos y distancia."""
     x, y, w, h = roi
     H = view.shape[0]
     if dist > 0:
@@ -204,31 +198,16 @@ def draw_extra(view, sess, now, roi, dist, hint):
         cv2.putText(view, sess.note, (10, H - 72), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     cv2.putText(view, params_text(sess.clf), (10, H - 48), cv2.FONT_HERSHEY_SIMPLEX,
                 0.45, (255, 255, 255), 1)
-    if sess.enroll is not None:
-        cv2.putText(view, "MODO ADMIN: clave nueva", (20, 130), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6, (0, 165, 255), 2)
-        if sess.new_key is not None:
-            cv2.putText(view, " - ".join(sess.new_key), (20, 160), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9, (0, 255, 0), 2)
-            cv2.putText(view, "ENTER guardar | ESC cancelar | r repetir", (20, 185),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    kind = sess.kind if sess.kind else "sin elegir (c / x)"
+    cv2.putText(view, "Prueba: %s | correctas %d | incorrectas %d" % (
+        kind, sess.counts["correcta"], sess.counts["incorrecta"]), (10, H - 120),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 200, 0), 1)
 
 
 def draw_view(frame, sess, now, fps, roi, label, dist, hint):
     """Dibuja todo el feedback sobre una copia del frame."""
     view = frame.copy()
-    if sess.enroll is not None and sess.new_key is not None:
-        # clave nueva completa: no se usa el decodificador temporal (mostraria GRANTED y la clave vieja)
-        x, y, w, h = roi
-        cv2.rectangle(view, (x, y), (x + w, y + h), (0, 200, 0), 2)
-        cv2.putText(view, "ADMIN", (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
-        for i in range(KEY_LEN):
-            cv2.circle(view, (20 + 40 * i, 60), 12, (255, 255, 255), -1)
-        cv2.putText(view, "FPS: %.1f" % fps, (view.shape[1] - 150, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    else:
-        shown = sess.enroll if sess.enroll is not None else sess.dec
-        draw_overlay(view, shown, now, fps, roi, label)
+    draw_overlay(view, sess.dec, now, fps, roi, label)
     draw_extra(view, sess, now, roi, dist, hint)
     return view
 
@@ -236,7 +215,7 @@ def draw_view(frame, sess, now, fps, roi, label, dist, hint):
 # ---------------------------------------------------------------- programa principal
 def main():
     clf = Classifier.load(MODEL_FILE)
-    sess = Session(clf)
+    sess = Session(clf, LOG_FILE)
     size, map1, map2 = load_maps()
     cap = open_camera()
     if not cap.isOpened():
@@ -341,10 +320,10 @@ def main():
 
         # teclas
         key = cv2.waitKey(1) & 0xFF
-        if key == ord("b") and sess.enroll is None:
+        if key == ord("b"):
             bg_frames = []
             collecting = "bg"
-        elif key == ord("p") and sess.enroll is None:
+        elif key == ord("p"):
             skin_frames = []
             collecting = "skin"
         elif key != 255:
@@ -357,6 +336,8 @@ def main():
         elapsed = time.time() - t_ready
         print("FPS medios (sistema calibrado): %.1f | tiempo medio de procesado: %.1f ms/frame"
               % (n_ready / elapsed, 1000 * proc_time / n_ready))
+        append_row(FPS_FILE, FPS_HEADER, "%s,%.1f,%.1f" % (time.strftime("%Y-%m-%d %H:%M:%S"),
+                   n_ready / elapsed, 1000 * proc_time / n_ready))
     print("Clave final: %s | %s" % ("-".join(decoder.KEY), params_text(clf)))
 
 
