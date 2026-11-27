@@ -28,6 +28,8 @@ El plan detallado del sistema de seguridad está en [`docs/PLAN_SISTEMA_SEGURIDA
 │   ├── test_decoder.py     # Prueba del decodificador con etiquetas simuladas
 │   ├── demo.py             # Sistema completo en directo (cámara -> desbloqueo)
 │   ├── demo_offline.py     # Prueba de la demo sin cámara
+│   ├── metricas.py         # FRR, FAR, tiempo medio y FPS a partir de results/
+│   ├── results/            # intentos.csv y fps.csv (los escribe demo.py)
 │   ├── data/               # Dataset de plantillas y modelo entrenado
 │   └── captures/           # Capturas de cada paso del procesado (para el informe)
 ├── proposed_system/        # Sistema propuesto
@@ -108,7 +110,7 @@ python eval_clasificador.py [--guardar]   # evaluación offline (matriz de confu
 python entrenar.py                        # entrena con todo el dataset -> data/modelo.npz
 ```
 
-`classifier.py` es un k-NN (k = 3) sobre el HOG de la máscara. La distancia media a los 3 vecinos más cercanos se compara con un umbral tau (percentil 95 de las distancias entre muestras de la misma letra en otros bloques): si lo supera, la etiqueta es `"?"` (hay mano pero no es ninguno de los 5 signos). La evaluación `eval_clasificador.py` es anidada con bloques (leave-one-block-out), con una sola sesión de grabación, así que es optimista: 99,0 % global y todas las letras ≥ 95 %. El rechazo por tau solo detecta gestos muy distintos de las letras entrenadas; la falsa aceptación real se mide en la fase 6.
+`classifier.py` es un k-NN (k = 3) sobre el HOG de la máscara. La distancia media a los 3 vecinos más cercanos se compara con un umbral tau (percentil 95 de las distancias entre muestras de la misma letra en otros bloques): si lo supera, la etiqueta es `"?"` (hay mano pero no es ninguno de los 5 signos). La evaluación `eval_clasificador.py` es anidada con bloques (leave-one-block-out), con una sola sesión de grabación, así que es optimista: 100 % global, 100 % en cada letra y sin confusiones U↔B. Con el dataset actual tau (P95) vale 0,562. El rechazo por tau solo detecta gestos muy distintos de las letras entrenadas: en una prueba aproximada (dejar una letra fuera del entrenamiento) la U ausente se sigue aceptando en el 72,5 % de sus frames y la I en el 35 %, porque se parecen a otras letras; C, B y L ausentes se rechazan siempre. La falsa aceptación real de la secuencia completa se mide en la fase 6.
 
 ### Demo en directo (fase 5)
 
@@ -118,9 +120,30 @@ python demo.py            # sistema completo con la cámara
 python demo_offline.py    # misma lógica sin cámara (máscaras del dataset y cámara simulada)
 ```
 
-Bucle: cámara → undistort → ROI → segmentación → features → clasificador → `decoder.py` → pantalla. Orden al arrancar: quitar la mano de la ROI y pulsar `b` (fondo); palma sobre el cuadrado cian y pulsar `p` (piel); hacer los 5 signos. La única clave válida es **CUBIL**; cualquier otra secuencia se deniega. Teclas: `r` reinicia la secuencia, `q` sale e imprime los FPS medios. Parámetros en vivo: `1`/`2` ventana N, `3`/`4` ratio de mayoría, `5`/`6` frames de neutro M, `7`/`8` timeout, `9`/`0` tau del clasificador.
+Bucle: cámara → undistort → ROI → segmentación → features → clasificador → `decoder.py` → pantalla. Orden al arrancar: quitar la mano de la ROI y pulsar `b` (fondo); palma sobre el cuadrado cian y pulsar `p` (piel); hacer los 5 signos. La única clave válida es **CUBIL**; cualquier otra secuencia se deniega. Teclas: `r` reinicia la secuencia (no funciona durante el bloqueo), `q` sale e imprime los FPS medios, `c` / `x` marcan si el siguiente intento es con la clave correcta o con una incorrecta (para la fase 6). Parámetros en vivo: `1`/`2` ventana N, `3`/`4` ratio de mayoría, `5`/`6` frames de neutro M, `7`/`8` timeout, `9`/`0` tau del clasificador.
+
+**Decodificador.** Cada signo se confirma cuando ocupa ≥ 80 % de los últimos 15 frames (y no es `"?"`); después hay que retirar la mano 10 frames. Si un signo no coincide con la clave, solo se anota un error interno: el sistema no dice en qué posición falló. El veredicto se da cuando se han confirmado los 5 signos: `GRANTED` si todos coinciden en orden y `DENIED` en caso contrario (se muestra 2 s y se vuelve a pedir la clave). Tres `DENIED` seguidos producen `LOCKED`: 30 s sin leer signos, y al terminar se reinicia el contador. Un `GRANTED` también reinicia el contador. Si pasan 5 s sin confirmar un signo se borra lo introducido (`TIMEOUT`), que no cuenta como fallo.
 
 **Limitación conocida:** si el color del fondo cae dentro del rango de piel (pared beige con luz amarilla, por ejemplo), el filtro de piel no separa y la segmentación depende casi solo de la resta de fondo, que se ve afectada por las sombras. La pantalla avisa de este caso. Se recomienda fondo liso y neutro con luz estable.
+
+### Pruebas y métricas (fase 6)
+
+```bash
+cd security
+python demo.py            # pulsar c o x antes de cada intento; q al terminar
+python metricas.py        # lee results/intentos.csv y results/fps.csv
+```
+
+`demo.py` añade una fila a `results/intentos.csv` por intento (`fecha,tipo,resultado,segundos,secuencia`). `metricas.py` calcula: **FRR** = intentos con clave correcta que no dan `GRANTED` / intentos correctos; **FAR** = intentos con clave incorrecta que dan `GRANTED` / intentos incorrectos; tiempo medio, mínimo y máximo de los `GRANTED` correctos; y los FPS medios de `fps.csv`. Si hay 0 falsas aceptaciones con n ≥ 10 intentos, imprime también una cota superior (regla de tres). Protocolo: 20 intentos con CUBIL y 20 con otras secuencias, en casa, con la misma luz y fondo que el dataset de prueba (`register.py --out test_dia2.npz`).
+
+| Métrica | Resultado |
+|---|---|
+| Evaluación offline, un bloque fuera (optimista) | 100 % global, 200 muestras |
+| Evaluación en otro sitio y otra luz (`test_dia2.npz`) | pendiente |
+| FRR (20 intentos correctos) | pendiente |
+| FAR (20 intentos incorrectos) | pendiente |
+| Tiempo medio de introducción | pendiente |
+| FPS medios | ~25 (limitado por la cámara; procesado 3-4 ms/frame) |
 
 ### Prueba del decodificador (sin cámara)
 
@@ -177,8 +200,8 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 | 0 | Propuesta | Hecha |
 | 1 | Base: cámara, FPS, calibración y undistort | Hecha (30 FPS con y sin corrección, RMS 0,114 px) |
 | 2 | Segmentación de la mano | Hecha (las 5 letras dan máscara limpia; capturas en `security/captures/seg_*`) |
-| 3 | Features y registro de plantillas | Hecha (`security/data/dataset.npz`: 200 muestras, 40 por letra, ROI y exposición de la demo) |
-| 4 | Clasificador k-NN | Hecha (HOG, k = 3, tau = P95; 99,0 % en evaluación offline optimista; `security/data/modelo.npz`) |
-| 5 | Integración | En curso (`demo.py` y `demo_offline.py` listos; falta la prueba en directo) |
-| 6 | Pruebas y métricas | Pendiente |
-| 7 | Documentación | Pendiente |
+| 3 | Features y registro de plantillas | Hecha (`security/data/dataset.npz`: 200 muestras, 40 por letra, grabadas con la ROI a la izquierda de la imagen y la exposición de la demo) |
+| 4 | Clasificador k-NN | Hecha (HOG, k = 3, tau = P95 = 0,562; 100 % en evaluación offline optimista; `security/data/modelo.npz`) |
+| 5 | Integración | Hecha (CUBIL desbloquea en directo y CUBLI se deniega; ~25 FPS, 3-4 ms de procesado por frame) |
+| 6 | Pruebas y métricas | Pendiente (código listo: `demo.py` registra los intentos y `metricas.py` calcula las cifras; falta grabar en casa) |
+| 7 | Documentación | En curso (README y plan al día hasta la fase 5; faltan resultados de la fase 6, figuras e informe) |

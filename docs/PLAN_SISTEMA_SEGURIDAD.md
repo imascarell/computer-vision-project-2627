@@ -88,8 +88,9 @@ Cámara → Undistort → ROI → YCrCb → Máscara (piel ∧ resta de fondo) �
 
 **Nivel clave:** `INPUT (S0…S4) → verificar en S5 → GRANTED / DENIED`
 - Cada signo confirmado avanza un estado; si no coincide con la clave se activa un flag de error, pero se sigue avanzando (no se revela en qué posición se falló).
-- `DENIED` × 3 seguidos → `LOCKED` (bloqueo temporal).
-- Reset: tecla `r` o timeout sin confirmar signo.
+- El veredicto se da al confirmar el 5.º signo: `GRANTED` o `DENIED` (se muestra 2 s).
+- `DENIED` × 3 seguidos → `LOCKED` (30 s sin leer signos; después se reinicia el contador). Un `GRANTED` también lo reinicia.
+- Reset: tecla `r` (no durante el bloqueo) o timeout de 5 s sin confirmar signo; el timeout no cuenta como fallo.
 
 **Nivel signo:** `WAIT_HAND → DETECTING → WAIT_NEUTRAL`
 - Un signo se confirma si ocupa ≥ 80 % de los últimos N frames (y no es *desconocido*).
@@ -108,4 +109,10 @@ Cámara → Undistort → ROI → YCrCb → Máscara (piel ∧ resta de fondo) �
 | Confusión U / B | Relación de aspecto y área + HOG; vigilar en la matriz de confusión |
 | Falsos positivos en transiciones | Ventana de N frames + neutro obligatorio + rechazo |
 
-**Escenario fijo** desde la fase 2: mismo fondo liso, misma luz y manga larga para el dataset y la demo.
+**Escenario fijo** desde la fase 2: mismo fondo liso, misma luz y manga larga para el dataset y la demo. La ROI está en el lado izquierdo de la imagen (ahí cae la mano derecha, porque la imagen no se espeja).
+
+---
+
+## Estado
+
+Fases 0 a 5 hechas. Pendiente: fase 6 (pruebas y métricas en casa) y fase 7 (documentación e informe). La marcha del proyecto está en la tabla de estado del [README](../README.md).
