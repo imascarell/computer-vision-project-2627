@@ -29,9 +29,10 @@ import numpy as np
 from cam import open_camera, driver_state
 from camera import load_maps
 
-# ROI: x, y, ancho, alto. Zona donde se coloca la mano derecha (lado derecho de la imagen),
-# fuera de la cara. Se puede mover con i k j l y copiar el valor final aqui.
-ROI = [360, 120, 240, 240]
+# ROI: x, y, ancho, alto. Zona donde se coloca la mano derecha: lado IZQUIERDO de la imagen
+# (la imagen no se espeja, asi que la mano derecha cae a la izquierda), fuera de la cara.
+# Antes era [360, 120, 240, 240] (lado derecho). Se puede mover con i k j l y copiar el valor aqui.
+ROI = [40, 120, 240, 240]
 STEP = 10                  # pixeles que mueve la ROI cada pulsacion
 N_FPS = 30                 # frames para los FPS en pantalla
 N_BG = 30                  # frames que se promedian para el fondo
