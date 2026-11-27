@@ -44,7 +44,7 @@ BLOCKS = ["centrada",
           "girada ~15 grados hacia la derecha de la pantalla"]
 
 # lado de la ROI por el que entra el antebrazo (el unico donde la mano puede tocar el borde)
-ENTRY = {"C": "abajo", "U": "abajo", "B": "derecha", "I": "abajo", "L": "abajo"}
+ENTRY = {"C": "abajo", "U": "abajo", "B": "abajo", "I": "abajo", "L": "abajo"}
 
 EXPOSURE = -4              # la misma que se uso en segmentation.py
 MARGIN = 2                 # px: tocar el borde = estar a <= MARGIN px de el
