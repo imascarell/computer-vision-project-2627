@@ -17,11 +17,18 @@ El plan detallado del sistema de seguridad está en [`docs/PLAN_SISTEMA_SEGURIDA
 │   ├── pattern/            # Patrón de calibración (PDF para imprimir)
 │   └── images/             # Fotos del patrón tomadas con la cámara de la demo
 ├── security/               # Sistema de seguridad
+│   ├── cam.py, camera.py, camera_settings.py  # Cámara fija (WB y exposición), undistort y FPS
+│   ├── segmentation.py     # Segmentación de la mano -> máscara 64x64
 │   ├── features.py         # Features de una máscara 64x64 (Hu, geometría, HOG)
 │   ├── register.py         # Registro del dataset de letras (C, U, B, I, L)
+│   ├── classifier.py       # k-NN con rechazo ("?")
+│   ├── entrenar.py         # Entrena el modelo final -> data/modelo.npz
+│   ├── eval_clasificador.py  # Evaluación offline (matriz de confusión)
 │   ├── decoder.py          # Máquina de estados que decodifica la secuencia de signos
 │   ├── test_decoder.py     # Prueba del decodificador con etiquetas simuladas
-│   ├── data/               # Dataset de plantillas de las letras
+│   ├── demo.py             # Sistema completo en directo (cámara -> desbloqueo)
+│   ├── demo_offline.py     # Prueba de la demo sin cámara
+│   ├── data/               # Dataset de plantillas y modelo entrenado
 │   └── captures/           # Capturas de cada paso del procesado (para el informe)
 ├── proposed_system/        # Sistema propuesto
 ├── docs/                   # Plan de trabajo y documentación
@@ -93,6 +100,28 @@ python register.py --recalcular   # sin cámara: recalcula las features desde la
 
 `register.py` graba 40 frames por letra (4 bloques de 10: centrada, más/menos antebrazo visible, giro a un lado, giro al otro). Mover la mano sin girarla no cambia la máscara 64x64 (el recorte se centra en la mano). Un frame se guarda solo si hay mano, no toca el borde de la ROI salvo por donde entra el antebrazo (abajo; derecha en la B), la mano está quieta (IoU ≥ 0,85 con el frame anterior durante 5 frames) y es distinta de la última guardada (IoU < 0,95). Teclas: `b` fondo, `p` piel, `1`-`5` letra (C U B I L), espacio empezar/pausar, `x` borrar la letra, `t`/`g` y `r`/`f` umbrales (solo sin grabar), `q` guardar y salir. El `.npz` guarda máscaras, etiquetas, features, bloque, rango de piel, umbral de resta, ROI y exposición. `--out nombre.npz` graba otro fichero (p. ej. otro día u otra luz, para evaluar en la fase 4).
 
+### Clasificador (fase 4)
+
+```bash
+cd security
+python eval_clasificador.py [--guardar]   # evaluación offline (matriz de confusión)
+python entrenar.py                        # entrena con todo el dataset -> data/modelo.npz
+```
+
+`classifier.py` es un k-NN (k = 3) sobre el HOG de la máscara. La distancia media a los 3 vecinos más cercanos se compara con un umbral tau (percentil 95 de las distancias entre muestras de la misma letra en otros bloques): si lo supera, la etiqueta es `"?"` (hay mano pero no es ninguno de los 5 signos). La evaluación `eval_clasificador.py` es anidada con bloques (leave-one-block-out), con una sola sesión de grabación, así que es optimista: 99,0 % global y todas las letras ≥ 95 %. El rechazo por tau solo detecta gestos muy distintos de las letras entrenadas; la falsa aceptación real se mide en la fase 6.
+
+### Demo en directo (fase 5)
+
+```bash
+cd security
+python demo.py            # sistema completo con la cámara
+python demo_offline.py    # misma lógica sin cámara (máscaras del dataset y cámara simulada)
+```
+
+Bucle: cámara → undistort → ROI → segmentación → features → clasificador → `decoder.py` → pantalla. Orden al arrancar: quitar la mano de la ROI y pulsar `b` (fondo); palma sobre el cuadrado cian y pulsar `p` (piel); hacer los 5 signos. La única clave válida es **CUBIL**; cualquier otra secuencia se deniega. Teclas: `r` reinicia la secuencia, `q` sale e imprime los FPS medios. Parámetros en vivo: `1`/`2` ventana N, `3`/`4` ratio de mayoría, `5`/`6` frames de neutro M, `7`/`8` timeout, `9`/`0` tau del clasificador.
+
+**Limitación conocida:** si el color del fondo cae dentro del rango de piel (pared beige con luz amarilla, por ejemplo), el filtro de piel no separa y la segmentación depende casi solo de la resta de fondo, que se ve afectada por las sombras. La pantalla avisa de este caso. Se recomienda fondo liso y neutro con luz estable.
+
 ### Prueba del decodificador (sin cámara)
 
 ```bash
@@ -149,7 +178,7 @@ Con `s` se guarda la imagen (solo si se detecta el tablero) en `calibration/imag
 | 1 | Base: cámara, FPS, calibración y undistort | Hecha (30 FPS con y sin corrección, RMS 0,114 px) |
 | 2 | Segmentación de la mano | Hecha (las 5 letras dan máscara limpia; capturas en `security/captures/seg_*`) |
 | 3 | Features y registro de plantillas | Hecha (`security/data/dataset.npz`: 200 muestras, 40 por letra, ROI y exposición de la demo) |
-| 4 | Clasificador k-NN | Pendiente |
-| 5 | Integración | Pendiente |
+| 4 | Clasificador k-NN | Hecha (HOG, k = 3, tau = P95; 99,0 % en evaluación offline optimista; `security/data/modelo.npz`) |
+| 5 | Integración | En curso (`demo.py` y `demo_offline.py` listos; falta la prueba en directo) |
 | 6 | Pruebas y métricas | Pendiente |
 | 7 | Documentación | Pendiente |

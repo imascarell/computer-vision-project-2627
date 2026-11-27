@@ -62,7 +62,7 @@ Cámara → Undistort → ROI → YCrCb → Máscara (piel ∧ resta de fondo) �
 
 ### Fase 5 — Integración
 - Bucle principal: cámara → reconocedor → `decoder.py` → overlay.
-- Teclas: `r` (reset de la secuencia), `n` (modo administrador: nueva clave), `q` (salir).
+- Teclas: `r` (reset de la secuencia), `q` (salir). La clave es fija (CUBIL); no hay modo administrador.
 - Ajuste en vivo de los parámetros del decodificador: ventana N, ratio de mayoría, frames de neutro M y timeout.
 
 **Hecho cuando:** CUBIL desbloquea en directo y cualquier secuencia incorrecta se deniega.
@@ -89,7 +89,6 @@ Cámara → Undistort → ROI → YCrCb → Máscara (piel ∧ resta de fondo) �
 **Nivel clave:** `INPUT (S0…S4) → verificar en S5 → GRANTED / DENIED`
 - Cada signo confirmado avanza un estado; si no coincide con la clave se activa un flag de error, pero se sigue avanzando (no se revela en qué posición se falló).
 - `DENIED` × 3 seguidos → `LOCKED` (bloqueo temporal).
-- `ENROLL` (modo administrador): graba una nueva clave de 5 signos distintos.
 - Reset: tecla `r` o timeout sin confirmar signo.
 
 **Nivel signo:** `WAIT_HAND → DETECTING → WAIT_NEUTRAL`
